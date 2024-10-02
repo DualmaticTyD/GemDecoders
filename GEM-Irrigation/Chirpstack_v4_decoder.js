@@ -2,7 +2,7 @@
  * Chirpstack v4 Payload decoder for GEM devices
  * 
  * Copyright Dual Matic Tecnología y Desarrollo S.L.
- * @version 0.5
+ * @version 0.6
  * 
  * @product GEM V2
  * 
@@ -25,13 +25,12 @@ function decodeUplink(input) {
   let decoded = {};
   
   decoded.bytes = bytes;
-  decoded.port = port;
-  decoded.lenb = bytes.length;
-  
   
   ain_chns = [0x05, 0x06];
   din_chns = [0x01, 0x02];
+  volt_chns = [0x08, 0x09];
   cnt_mult = 10;
+  volt_mult = 100;
 
   if (port === 1) {
     decoded.ch_status = [];
@@ -69,6 +68,12 @@ function decodeUplink(input) {
         decoded[din_channel_name] = readUInt32BE(bytes.slice(i, i + 4)) / cnt_mult;
         i += 4; //4 bytes size
       }
+      //Voltage information
+      else if (includes(volt_chns, channel_id) && channel_type === 0x74) {
+        var voltage = "volt_" + (channel_id - volt_chns[0] +1);
+        decoded[voltage] = readUInt16BE(bytes.slice(i, i + 2)) / volt_mult;
+        i += 2; //2 bytes size
+      }
     } //for loop bytes lenght
   } // fPort = 1
   //Scheduler uplink
@@ -91,6 +96,11 @@ function decodeUplink(input) {
 function readUInt16LE(bytes) {
     var value = (bytes[1] << 8) + bytes[0];
     return value & 0xffff;
+}
+
+function readUInt16BE (buf, offset) {
+  offset = offset >>> 0;
+  return (buf[offset] << 8) | buf[offset + 1];
 }
 
 function readInt16LE(bytes) {
@@ -172,19 +182,18 @@ function encodeDownlink(input) {
         //write specific scheduler on key scheduler_write and write all scheduler objects (0xCA)
         outbytes = [0x20, input.data.output, input.data.write_scheduler, 0xCA, input.data.control_byte, 0xFF, input.data.weekmask, input.data.start_timeHr, input.data.start_timeMin, input.data.end_timeHr, input.data.end_timeMin, input.data.flow_finishMSB, input.data.flow_finishLSB];
     } else if (input.data.hasOwnProperty('write_controlbyte')) {
-      //write control byte on key control_byte to output output and to scheduler contained on schedluler_key   
+      //write control byte on key write_controlbyte to specific output contained in data.output and specific scheduler contained on data.scheduler   
       outbytes = [0x20, input.data.output, input.data.scheduler, 0x01, input.data.write_controlbyte];
     } else if (input.data.hasOwnProperty('write_weekmask')) {
-      //write weekmask byte on key control_byte to output output and to scheduler contained on schedluler_key   
+      //write weekmask byte on key write_weekmask to specific output contained in data.output and specific scheduler contained on data.scheduler   
       outbytes = [0x20, input.data.output, input.data.scheduler, 0x02, input.data.write_weekmask];
     } else if (input.data.hasOwnProperty('write_timer')) {
-      //write weekmask byte on key control_byte to output output and to scheduler contained on schedluler_key  
+      //write timers on keys data.start_timeHr data.start_timeMin data.end_timeHr data.end_timeMin to specific output contained in data.output and specific scheduler contained on data.scheduler  
       outbytes = [0x20, input.data.output, input.data.scheduler, 0x03, input.data.start_timeHr, input.data.start_timeMin, input.data.end_timeHr, input.data.end_timeMin];
     } else if (input.data.hasOwnProperty('write_flow')) {
-      //write weekmask byte on key control_byte to output output and to scheduler contained on schedluler_key  
+      //write flow to finish on keys data.flow_finishMSB data.flow_finishLSB to specific output contained in data.output and specific scheduler contained on data.scheduler  
       outbytes = [0x20, input.data.output, input.data.scheduler, 0x05, input.data.flow_finishMSB, input.data.flow_finishLSB];
     }
-
 }
 //Gem settings downlink command
 else if (port === 6) {
